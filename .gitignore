@@ -48,4 +48,12 @@ app.*.map.json
 /android/*.jks
 /android/*.keystore
 /android/key.properties
+
+# Firebase credentials — never commit
+/android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+
+# Obfuscation debug info — keep locally only
+/build/debug_info/
+
 .flutter-plugins

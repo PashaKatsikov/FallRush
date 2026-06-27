@@ -1,5 +1,5 @@
 name: fallrush
-description: "Fall Rush — neon ball tube runner"
+description: "Fall Rush - neon ball tube runner"
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -11,7 +11,30 @@ dependencies:
     sdk: flutter
 
   cupertino_icons: ^1.0.8
+
+  # Persistence
   shared_preferences: ^2.5.3
+  flutter_secure_storage: ^10.0.0
+
+  # Networking + device
+  http: ^1.4.0
+  connectivity_plus: ^6.1.5
+  device_info_plus: ^11.4.0
+  package_info_plus: ^8.3.0
+  url_launcher: ^6.3.2
+
+  # Attribution + Firebase
+  appsflyer_sdk: ^6.16.0
+  firebase_core: ^3.14.0
+  firebase_messaging: ^15.2.5
+  firebase_app_check: ^0.3.2+10
+  flutter_local_notifications: ^18.0.1
+
+  # WebView + media
+  webview_flutter: ^4.13.2
+  webview_flutter_android: ^4.11.1
+  video_player: ^2.9.4
+  file_picker: ^11.0.2
 
 dev_dependencies:
   flutter_test:
@@ -22,9 +45,9 @@ dev_dependencies:
 
 flutter_launcher_icons:
   android: true
-  ios: true
+  ios: false
   image_path: "assets/assets_png/icon.png"
-  min_sdk_android: 21
+  min_sdk_android: 30
   remove_alpha_ios: true
   background_color_ios: "#05060F"
   adaptive_icon_background: "#05060F"
@@ -33,6 +56,4 @@ flutter_launcher_icons:
 flutter:
   uses-material-design: true
   assets:
-    # Only webp assets are bundled. PNGs in assets_png/ (icon, source loading
-    # screens) are used at build time by flutter_launcher_icons / tools only.
     - assets/assets_webp/
