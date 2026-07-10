@@ -346,26 +346,59 @@ class _BootOrchestratorState extends State<BootOrchestrator> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child: LinearProgressIndicator(
-                            value: _progress,
-                            minHeight: 10,
-                            backgroundColor:
-                                Colors.white.withValues(alpha: 0.14),
-                            valueColor: const AlwaysStoppedAnimation(
-                              Color(0xFF00E5FF),
+                        Container(
+                          padding: const EdgeInsets.all(2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF05060F).withValues(alpha: 0.85),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: const Color(0xFF00E5FF).withValues(alpha: 0.9),
+                              width: 1.4,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF00E5FF).withValues(alpha: 0.55),
+                                blurRadius: 18,
+                                spreadRadius: 1,
+                              ),
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.55),
+                                blurRadius: 8,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(9),
+                            child: LinearProgressIndicator(
+                              value: _progress,
+                              minHeight: 12,
+                              backgroundColor: Colors.black.withValues(alpha: 0.6),
+                              valueColor: const AlwaysStoppedAnimation(
+                                Color(0xFF00E5FF),
+                              ),
                             ),
                           ),
                         ),
                         const SizedBox(height: 12),
                         Text(
                           'LOADING ${(_progress * 100).round()}%',
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.85),
+                          style: const TextStyle(
+                            color: Colors.white,
                             fontSize: 13,
                             fontWeight: FontWeight.bold,
                             letterSpacing: 3,
+                            shadows: [
+                              Shadow(
+                                color: Color(0xCC000000),
+                                blurRadius: 6,
+                                offset: Offset(0, 2),
+                              ),
+                              Shadow(
+                                color: Color(0x8800E5FF),
+                                blurRadius: 12,
+                              ),
+                            ],
                           ),
                         ),
                       ],

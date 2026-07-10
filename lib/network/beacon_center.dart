@@ -95,30 +95,40 @@ class BeaconCenter {
       return false;
     }
 
-    // 1) Эталонный путь greensun_corp/push_notification_service.dart.
-    var settings = await _fcm!.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-      provisional: false,
-    );
+    // 0) Если разрешение уже было выдано ранее — ничего не показываем.
+    var settings = await _fcm!.getNotificationSettings();
     var granted =
         settings.authorizationStatus == AuthorizationStatus.authorized ||
             settings.authorizationStatus == AuthorizationStatus.provisional;
-    _log('askPermission: FirebaseMessaging status=${settings.authorizationStatus}');
+    _log('askPermission: initial status=${settings.authorizationStatus}');
 
-    // 2) Fallback для Samsung One UI / MIUI / некоторых HyperOS,
-    //    где (1) не показывает диалог. Канал в _setUpLocal() уже
-    //    создан, плагин готов.
-    if (!granted && Platform.isAndroid) {
-      final plugin = _local.resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>();
-      final androidGranted =
-          await plugin?.requestNotificationsPermission() ?? false;
-      _log('askPermission: native POST_NOTIFICATIONS fallback granted=$androidGranted');
-      if (androidGranted) {
-        granted = true;
-        settings = await _fcm!.getNotificationSettings();
+    if (!granted) {
+      if (Platform.isAndroid) {
+        // На Android идём напрямую через flutter_local_notifications:
+        // это единственный путь, который гарантированно показывает
+        // системный диалог POST_NOTIFICATIONS ровно один раз
+        // (без двойного вызова через firebase_messaging, из-за
+        // которого на части OEM диалог всплывал дважды).
+        final plugin = _local.resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>();
+        final androidGranted =
+            await plugin?.requestNotificationsPermission() ?? false;
+        _log('askPermission: native POST_NOTIFICATIONS granted=$androidGranted');
+        if (androidGranted) {
+          granted = true;
+          settings = await _fcm!.getNotificationSettings();
+        }
+      } else {
+        settings = await _fcm!.requestPermission(
+          alert: true,
+          badge: true,
+          sound: true,
+          provisional: false,
+        );
+        granted = settings.authorizationStatus ==
+                AuthorizationStatus.authorized ||
+            settings.authorizationStatus == AuthorizationStatus.provisional;
+        _log('askPermission: FirebaseMessaging status=${settings.authorizationStatus}');
       }
     }
 

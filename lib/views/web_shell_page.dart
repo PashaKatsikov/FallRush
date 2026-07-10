@@ -265,11 +265,8 @@ class _WebShellPageState extends State<WebShellPage>
       '--safe-top:0px!important;--safe-right:0px!important;' +
       '--safe-bottom:0px!important;--safe-left:0px!important;' +
     '}' +
-    'html,body,#__nuxt,#__layout,#app,#root,' +
-    '.gameview-mobile-header{' +
+    '.gameview-mobile-header,.app-header{' +
       'padding-top:0!important;' +
-      'padding-left:0!important;' +
-      'padding-right:0!important;' +
       'margin-top:0!important;' +
     '}';
 
