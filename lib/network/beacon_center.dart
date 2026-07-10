@@ -45,14 +45,19 @@ class BeaconCenter {
     try {
       await Firebase.initializeApp();
       _fcm = FirebaseMessaging.instance;
+      _log('Firebase initialized, FirebaseMessaging instance acquired');
 
       FirebaseMessaging.onBackgroundMessage(_bgBeaconSink);
 
       await _setUpLocal();
+      _log('Local notification channel ready: $fallRushPushChannel');
 
       _fcmToken = await _fcm!.getToken();
+      _logToken('initial', _fcmToken);
+
       _fcm!.onTokenRefresh.listen((t) {
         _fcmToken = t;
+        _logToken('rotated', t);
         onTokenRotated?.call(t);
       });
 
@@ -63,27 +68,103 @@ class BeaconCenter {
       if (initial != null) _onColdTap(initial);
 
       _alive = true;
-    } catch (_) {
+      _log('wakeUp complete (alive=true)');
+    } catch (e, st) {
+      _log('wakeUp FAILED: $e\n$st');
       // No Firebase config — gracefully run without push.
     }
   }
 
+  /// Запрос разрешения POST_NOTIFICATIONS.
+  ///
+  /// На референсном Samsung A55 (One UI 6, Android 15) метод
+  /// `FirebaseMessaging.requestPermission()` возвращает `denied`
+  /// без показа системного диалога, даже если разрешение никогда не
+  /// запрашивалось (баг плагина firebase_messaging 15.x для OEM,
+  /// которые делегируют permission delegate своему собственному
+  /// NotificationManager). Лечится явным вызовом
+  /// `AndroidFlutterLocalNotificationsPlugin.requestNotificationsPermission()`
+  /// — он внутри плагина 18.0.1 дёргает нативный
+  /// `ActivityCompat.requestPermissions(POST_NOTIFICATIONS, …)`,
+  /// единственный API, который физически показывает системный диалог
+  /// на API 33+.
   Future<bool> askPermission() async {
-    if (_fcm == null) return false;
-    final settings = await _fcm!.requestPermission(
+    if (_fcm == null) {
+      _log('askPermission: _fcm == null (Firebase не инициализирован) '
+          '→ диалог не показать, return false');
+      return false;
+    }
+
+    // 1) Эталонный путь greensun_corp/push_notification_service.dart.
+    var settings = await _fcm!.requestPermission(
       alert: true,
       badge: true,
       sound: true,
       provisional: false,
     );
-    final granted = settings.authorizationStatus == AuthorizationStatus.authorized ||
-        settings.authorizationStatus == AuthorizationStatus.provisional;
+    var granted =
+        settings.authorizationStatus == AuthorizationStatus.authorized ||
+            settings.authorizationStatus == AuthorizationStatus.provisional;
+    _log('askPermission: FirebaseMessaging status=${settings.authorizationStatus}');
+
+    // 2) Fallback для Samsung One UI / MIUI / некоторых HyperOS,
+    //    где (1) не показывает диалог. Канал в _setUpLocal() уже
+    //    создан, плагин готов.
+    if (!granted && Platform.isAndroid) {
+      final plugin = _local.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+      final androidGranted =
+          await plugin?.requestNotificationsPermission() ?? false;
+      _log('askPermission: native POST_NOTIFICATIONS fallback granted=$androidGranted');
+      if (androidGranted) {
+        granted = true;
+        settings = await _fcm!.getNotificationSettings();
+      }
+    }
+
     await _vault.markPushAccepted(granted);
     if (!granted &&
         settings.authorizationStatus == AuthorizationStatus.denied) {
       await _vault.markPushBlockedByOs();
     }
+
+    // Часть OEM (Pixel 8/9, Samsung S22+) откладывают создание FID
+    // до тех пор, пока permission не granted. Дёргаем getToken
+    // повторно — это даёт первый РАБОЧИЙ для пушей токен.
+    if (granted && (_fcmToken == null || _fcmToken!.isEmpty)) {
+      try {
+        _fcmToken = await _fcm!.getToken();
+        _logToken('post-permission', _fcmToken);
+      } catch (e) {
+        _log('getToken after grant FAILED: $e');
+      }
+    }
     return granted;
+  }
+
+  // ── logging helpers ────────────────────────────────────────────────
+  // Все сообщения идут одним фиксированным тегом, токен оформлен
+  // отдельным баннером, чтобы grep'ать его одной командой:
+  //   adb logcat -d | findstr "FCM TOKEN"
+  // ----------------------------------------------------------------
+
+  static const String _logTag = 'BEACON';
+
+  void _log(String message) {
+    if (!kDebugMode) return;
+    // ignore: avoid_print
+    print('[$_logTag] $message');
+  }
+
+  void _logToken(String label, String? token) {
+    if (!kDebugMode) return;
+    final body = (token == null || token.isEmpty)
+        ? '<NULL — FCM did not return a token>'
+        : token;
+    // ignore: avoid_print
+    print('[$_logTag] =========== FCM TOKEN ($label) ===========\n'
+        '$body\n'
+        '==========================================');
   }
 
   // ── internals ───────────────────────────────────────────────

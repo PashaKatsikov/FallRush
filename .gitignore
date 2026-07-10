@@ -49,8 +49,14 @@ app.*.map.json
 /android/*.keystore
 /android/key.properties
 
-# Firebase credentials — never commit
-/android/app/google-services.json
+# Firebase credentials.
+# NOTE: для внутреннего шаблона FallRush `android/app/google-services.json`
+# отслеживается в git, иначе каждый разработчик ловит ту же ловушку
+# «Firebase молча падает в catch, FCM token не выпускается». Внутри
+# файла только публичные дескрипторы (sender id, app id, web-safe
+# API key) — секретных ключей там нет. Если/когда репозиторий станет
+# публичным, раскомментировать строку ниже.
+# /android/app/google-services.json
 ios/Runner/GoogleService-Info.plist
 
 # Obfuscation debug info — keep locally only

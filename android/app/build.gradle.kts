@@ -5,6 +5,18 @@ plugins {
     id("com.android.application")
     id("kotlin-android")
     id("dev.flutter.flutter-gradle-plugin")
+    // Firebase ↔ Google Services. ОБЯЗАТЕЛЬНО подключать здесь, в
+    // `plugins { }`, а не условным `apply(plugin = ...)` внизу файла.
+    // Плагин цепляется к variant-API AGP и генерирует
+    // `app/build/generated/res/processDebugGoogleServices/values/values.xml`
+    // со строками `google_app_id`, `gcm_defaultSenderId`, `project_id`
+    // — это те самые ключи, которые `Firebase.initializeApp()` читает
+    // в рантайме. Если применить плагин ПОСЛЕ блока `android { }`, его
+    // variant-хук опаздывает к `mergeResources` и строки в APK не
+    // попадают. Симптом — Firebase молча падает в `try/catch`, FCM
+    // токен не выдаётся, диалог уведомлений не показывается, а пуш с
+    // консоли возвращает «Application install not found».
+    id("com.google.gms.google-services")
 }
 
 val keystoreProperties = Properties()
@@ -14,13 +26,9 @@ if (hasKeystore) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
-// Google-services is only applied when the JSON config has been
-// dropped in. This lets the project build cleanly before Firebase
-// credentials are provisioned.
-val googleServicesJson = file("google-services.json")
-if (googleServicesJson.exists()) {
-    apply(plugin = "com.google.gms.google-services")
-}
+// `google-services.json` ОБЯЗАН лежать в android/app/google-services.json
+// до запуска сборки. Плагин выше упадёт с понятным сообщением, если
+// файла нет — это лучше, чем тихо собрать APK без Firebase-строк.
 
 android {
     namespace = "com.fallrush.fallrushgame"

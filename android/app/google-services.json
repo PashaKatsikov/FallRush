@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "635154206809",
+    "project_id": "fallrush-eee6e",
+    "storage_bucket": "fallrush-eee6e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:635154206809:android:18d908e2c19fd339172148",
+        "android_client_info": {
+          "package_name": "com.fallrush.fallrushgame"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDJL-CKKALrkmG3Q4_eruyIloI8VzzPkHk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

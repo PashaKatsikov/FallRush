@@ -37,34 +37,74 @@ class BootOrchestrator extends StatefulWidget {
   State<BootOrchestrator> createState() => _BootOrchestratorState();
 }
 
-class _BootOrchestratorState extends State<BootOrchestrator>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _barCtrl;
+class _BootOrchestratorState extends State<BootOrchestrator> {
+  /// Видимое значение полосы (то, что рисуется). Плавно догоняет
+  /// `_target` через `_animateBar`.
   double _progress = 0;
+
+  /// Куда нужно «доехать» бару. Обновляется по реальным вехам:
+  /// 0.10 — booted, online, vault готов
+  /// 0.30 — beacons.wakeUp() закончен (Firebase, FCM token)
+  /// 0.55 — attribution + deep link готовы
+  /// 0.85 — backend verdict получен
+  /// 0.95 — assets / web shell прелоудены
+  /// 1.00 — мы прямо сейчас уходим со splash на следующий экран
+  double _target = 0;
   bool _routed = false;
+
+  /// «Watchdog»: даже если все шаги отработают мгновенно, держим бар
+  /// видимым минимум 700 мс, чтобы переход не выглядел дёрганым.
+  late final DateTime _bornAt;
+  static const Duration _minSplashTime = Duration(milliseconds: 700);
 
   @override
   void initState() {
     super.initState();
-    _barCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2200),
-    )..addListener(() {
-        if (mounted) setState(() => _progress = _barCtrl.value);
-      });
-    _barCtrl.forward();
+    _bornAt = DateTime.now();
     _kickOff();
   }
 
-  @override
-  void dispose() {
-    _barCtrl.dispose();
-    super.dispose();
+  // ── progress engine ────────────────────────────────────────────────
+  //
+  // Полоса больше НЕ привязана к фиксированному таймеру. Раньше
+  // `AnimationController(duration: 2200ms)` доезжал до 100% за 2.2 с
+  // независимо от реальной готовности: при медленной сети бар
+  // упирался в правый край и стоял, при быстрой — игра успевала
+  // открыться раньше, чем бар догонял.
+  //
+  // Теперь _setTarget(x) задаёт целевое значение, _animateBar()
+  // плавно докатывает _progress до _target. На каждой реальной вехе
+  // (online, beacons, attribution, verdict, prime) мы зовём
+  // _setTarget(...) и ждём окончания анимации. 100% появляется
+  // ровно перед навигацией на следующий экран.
+
+  Future<void> _setTarget(double next, {int millis = 350}) async {
+    _target = next.clamp(0.0, 1.0);
+    if (!mounted) return;
+    final from = _progress;
+    final to = _target;
+    if ((to - from).abs() < 0.001) return;
+    final steps = (millis / 16).round().clamp(1, 200);
+    for (var i = 1; i <= steps; i++) {
+      if (!mounted) return;
+      final t = i / steps;
+      final eased = Curves.easeOutCubic.transform(t);
+      setState(() => _progress = from + (to - from) * eased);
+      await Future<void>.delayed(const Duration(milliseconds: 16));
+    }
+    if (!mounted) return;
+    setState(() => _progress = to);
   }
 
   Future<void> _kickOff() async {
     widget.beacons.onTokenRotated = _onTokenRotated;
+    // 10% — первый кадр нарисован, vault уже warmUp'нут до runApp.
+    await _setTarget(0.10, millis: 250);
+
     await widget.beacons.wakeUp().catchError((_) {});
+    // 30% — Firebase + FCM token готовы (или Firebase упал и мы
+    // продолжаем без пуша — без разницы для прогресса).
+    await _setTarget(0.30, millis: 350);
 
     switch (widget.vault.currentPath()) {
       case LaunchPath.stream:
@@ -87,12 +127,14 @@ class _BootOrchestratorState extends State<BootOrchestrator>
       _gotoOffline();
       return;
     }
+    await _setTarget(0.40, millis: 200);
 
     await widget.attribution.boot();
     await Future.wait([
       widget.attribution.awaitAttribution(timeoutSec: 30),
       widget.attribution.awaitDeepLink(timeoutSec: 5),
     ]);
+    await _setTarget(0.55, millis: 350);
 
     final locale = Platform.localeName.replaceAll('-', '_');
     final body = await widget.attribution.assembleConfigBody(
@@ -100,15 +142,18 @@ class _BootOrchestratorState extends State<BootOrchestrator>
       pushToken: widget.beacons.token,
     );
     final verdict = await widget.gateway.askBackend(body);
+    await _setTarget(0.85, millis: 350);
 
     if (verdict.hasTarget) {
       await widget.vault.commitPath(LaunchPath.stream);
+      await _setTarget(0.95, millis: 200);
       await _finishProgress();
       if (!mounted) return;
       _gotoStream(verdict.target!);
     } else {
       await widget.vault.commitPath(LaunchPath.arcade);
       await GameAssets().loadAll();
+      await _setTarget(0.95, millis: 250);
       await _finishProgress();
       if (!mounted) return;
       _gotoArcade();
@@ -124,10 +169,12 @@ class _BootOrchestratorState extends State<BootOrchestrator>
       _gotoOffline();
       return;
     }
+    await _setTarget(0.40, millis: 200);
 
     // Cold-tap push URL takes precedence over the saved one.
     final pendingPush = await widget.vault.takePushUrl();
     if (pendingPush != null) {
+      await _setTarget(0.95, millis: 200);
       await _finishProgress();
       if (!mounted) return;
       _gotoStream(pendingPush);
@@ -141,6 +188,7 @@ class _BootOrchestratorState extends State<BootOrchestrator>
       widget.attribution.awaitAttribution(timeoutSec: 10),
       widget.attribution.awaitDeepLink(timeoutSec: 5),
     ]);
+    await _setTarget(0.55, millis: 350);
 
     final locale = Platform.localeName.replaceAll('-', '_');
     final body = await widget.attribution.assembleConfigBody(
@@ -148,6 +196,7 @@ class _BootOrchestratorState extends State<BootOrchestrator>
       pushToken: widget.beacons.token,
     );
     final verdict = await widget.gateway.askBackend(body);
+    await _setTarget(0.90, millis: 350);
 
     await _finishProgress();
     if (!mounted) return;
@@ -164,7 +213,9 @@ class _BootOrchestratorState extends State<BootOrchestrator>
   // ── Returning arcade user ───────────────────────────────────
 
   Future<void> _routeArcade() async {
+    await _setTarget(0.50, millis: 200);
     await GameAssets().loadAll();
+    await _setTarget(0.95, millis: 250);
     await _finishProgress();
     if (!mounted) return;
     _gotoArcade();
@@ -249,12 +300,18 @@ class _BootOrchestratorState extends State<BootOrchestrator>
     );
   }
 
+  /// Финал: добиваем полосу до 100% и держим её на экране минимум
+  /// `_minSplashTime`, чтобы splash не «моргнул» за 50 мс на быстрой
+  /// сети. Только после этого вызывающий код делает Navigator.push.
   Future<void> _finishProgress() async {
-    if (_barCtrl.value < 1.0) {
-      _barCtrl.duration = const Duration(milliseconds: 300);
-      await _barCtrl.forward(from: _barCtrl.value);
+    await _setTarget(1.0, millis: 250);
+    final elapsed = DateTime.now().difference(_bornAt);
+    final remaining = _minSplashTime - elapsed;
+    if (remaining > Duration.zero) {
+      await Future<void>.delayed(remaining);
+    } else {
+      await Future<void>.delayed(const Duration(milliseconds: 160));
     }
-    await Future.delayed(const Duration(milliseconds: 240));
   }
 
   // ── UI ──────────────────────────────────────────────────────
